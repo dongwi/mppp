@@ -95,7 +95,9 @@ static BOOL mpppDpFwdTxFragPkt
     INT8 linkHead[32] = {0};
     UINT32 pktLen
     UINT32 hdrLen;
-    UINT32 linkType;    
+    UINT32 linkType;
+    INT8 *pData = NULl;
+    nBuf_t *pktFrag, *pHeadTmp = NULL, *pHead = NULL;
 
     linkType = NBUF_DESC_GET_LINKTYPE(pPkt);
     ret = pppDpChanGetHdr(pMpppEntry->pppIndex, linkType, linkHead, &hdrLen);
@@ -105,8 +107,56 @@ static BOOL mpppDpFwdTxFragPkt
         return FALSE;
     }
 
-    pktLen = NBUF_DESC_GET_PKTLEN(pPkt);
+    hdrLen -= 2;
     
+    pktLen = NBUF_DESC_GET_PKTLEN(pPkt);
+
+    NBUF_ADJUST_PKTPTR(pPkt, hdrLen);
+    NBUF_ADJUST_PKTPTR(pPkt, -hdrLen);
+    pktLen -= hdrLen;
+
+    while (pktLen != 0) {
+        fragWeight = MIN(fragWeight, len);
+        pktFrag = nBufLenAlloc(fragWeight + hdrLen + NBUF_PREDATA_SIZE + ADJ_LINKINFO_LEN);
+        if (pktFrag == NULL) {
+            *encapOutPkt = NULL;
+            nBufChainFree(pHead);
+            return FALSE;
+        }
+
+        pData = NBUF_DESC_GET_PDATA(pktFrag);
+
+        NBUF_DESC_COPY(pktFrag, pPkt);
+        NBUF_DESC_SET_PDATA(pktFrag, pData);
+        
+        NBUF_DESC_CLR_DESCFLAGS(pktFrag, DFP_DESC_DESCFLAGS_MPPP_FRAG_BEGIN);
+        NBUF_SET_PKTNEXT(pktFrag, NULL);
+
+        /**
+         * pdata向后移除空余长度
+         * 拷贝报文头部信息
+         * 拷贝指定长度的报文信息
+         * 设置报文长度
+        */
+        NBUF_ADJUST_PKTPTR(pktFrag, NBUF_PREDATA_SIZE);
+        memcpy(NBUF_DESC_GET_PDATA(pktFrag), linkHead, hdrLen);
+        memcpy(NBUF_DESC_GET_PDATA(pktFrag) + hdrLen, NBUF_DESC_GET_PDATA(pPkt), fragWeight);
+        NBUF_DESC_SET_PKTLEN(pktFrag, fragWeight + hdrLen);
+
+        //对原始报文进行调整
+        NBUF_ADJUST_PKTPTR(pPkt, fragWeight);
+        NBUF_ADJUST_PKTLEN(pPkt, -fragWeight);
+        len -= fragWeight;
+        if (NULL == pHeadTmp) {
+            pHead = pHeadTmp = pktFrag;
+        } else {
+            //内部已经将pHeadTmp指向了报文链的尾部
+            NBUF_JOIN_TAIL(pktFrag, pHeadTmp);
+        }
+    }
+
+    *encapOutPkt = pHead;
+    return TRUE;
 }
 
 /**
