@@ -1,6 +1,8 @@
 typedef unsigned int UINT32;
 typedef int INT32;
 typedef int BOOL;
+typedef unsigned char UINT8;
+typedef char INT8
 
 #define TRUE (1)
 #define FALSE (0)
@@ -10,7 +12,6 @@ typedef int BOOL;
 
 #define MPPP_FLAG_INPUT_ORDER (1 << 0)
 #define MPPP_FLAG_SHORT_SEQ (1 << 1)
-
 
 #define MPPP_DP_HDR_FLAG_BEGIN (1 << 7)
 #define MPPP_DP_HDR_FLAG_END   (1 << 6)
@@ -99,7 +100,9 @@ static BOOL mpppDpFwdTxFragPkt
     INT8 *pData = NULl;
     nBuf_t *pktFrag, *pHeadTmp = NULL, *pHead = NULL;
 
+	//提取报文的链路类型
     linkType = NBUF_DESC_GET_LINKTYPE(pPkt);
+	//根据报文的链路类型，得到接口对应的链路头部
     ret = pppDpChanGetHdr(pMpppEntry->pppIndex, linkType, linkHead, &hdrLen);
     
     if (unlikely(ret == FALSE)) {
@@ -107,16 +110,19 @@ static BOOL mpppDpFwdTxFragPkt
         return FALSE;
     }
 
+	//跳过链路头部的 ff 03
     hdrLen -= 2;
-    
+	
+    //得到原始报文的长度
     pktLen = NBUF_DESC_GET_PKTLEN(pPkt);
-
-    NBUF_ADJUST_PKTPTR(pPkt, hdrLen);
-    NBUF_ADJUST_PKTPTR(pPkt, -hdrLen);
+	
+	//调整原始报文的长度和数据指针
+    NBUF_ADJUST_PKTLEN(pPkt, hdrLen);
+	NBUF_ADJUST_PKTPTR(pPkt, -hdrLen);
     pktLen -= hdrLen;
 
     while (pktLen != 0) {
-        fragWeight = MIN(fragWeight, len);
+        fragWeight = MIN(fragWeight, pktLen);
         pktFrag = nBufLenAlloc(fragWeight + hdrLen + NBUF_PREDATA_SIZE + ADJ_LINKINFO_LEN);
         if (pktFrag == NULL) {
             *encapOutPkt = NULL;
@@ -125,11 +131,10 @@ static BOOL mpppDpFwdTxFragPkt
         }
 
         pData = NBUF_DESC_GET_PDATA(pktFrag);
-
-        NBUF_DESC_COPY(pktFrag, pPkt);
+        NBUF_DESC_COPY(pktFrag, pPkt);//拷贝报文描述符，因此需要提前备份数据指针
         NBUF_DESC_SET_PDATA(pktFrag, pData);
         
-        NBUF_DESC_CLR_DESCFLAGS(pktFrag, DFP_DESC_DESCFLAGS_MPPP_FRAG_BEGIN);
+        NBUF_DESC_CLR_DESCFLAGS(pktFrag, DFP_DESC_DESCFLAGS_MPPP_FRAG_BEGIN);//清楚报文描述符中的标记
         NBUF_SET_PKTNEXT(pktFrag, NULL);
 
         /**
@@ -146,7 +151,7 @@ static BOOL mpppDpFwdTxFragPkt
         //对原始报文进行调整
         NBUF_ADJUST_PKTPTR(pPkt, fragWeight);
         NBUF_ADJUST_PKTLEN(pPkt, -fragWeight);
-        len -= fragWeight;
+        pktLen -= fragWeight;
         if (NULL == pHeadTmp) {
             pHead = pHeadTmp = pktFrag;
         } else {
