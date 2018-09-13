@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <linux/spinlock.h>
+#include <linux/compiler.h>
 
 typedef unsigned int UINT32;
 typedef int INT32;
@@ -12,8 +14,8 @@ typedef short INT16
 #define TRUE (1)
 #define FALSE (0)
 
-#define MPPP_DP_TX_LOCK(spin_lock) fpss_spin_lock(&spin_lock)
-#define MPPP_DP_TX_UNLOCK(spin_lock) fpss_spin_unlock(&spin_lock)
+#define MPPP_DP_TX_LOCK(spin_lock) spin_lock(&spin_lock)
+#define MPPP_DP_TX_UNLOCK(spin_lock) spin_unlock(&spin_lock)
 
 #define MPPP_FLAG_INPUT_ORDER (1 << 0)
 #define MPPP_FLAG_SHORT_SEQ (1 << 1)
@@ -73,12 +75,16 @@ typedef struct nbuffer {
 #define DFP_DESC_DESCFLAGS_MPPP_FRAG_BEGIN  (1 << 0)
 #define DFP_DESC_DESCFLAGS_MPPP_ENC         (1 << 1)
 
+#define nBufFree(n)
+#define nBufLenAlloc(l) 
+#define MIN(m, n)   (((m) < (n)) ? (m) : (n))
+
 typedef struct MPPP_DP_ENTRY_STRUCT {
     UINT32 pppIndex;
     UINT32 cfgFlag;
     UINT32 seqNo;
     UINT32 sendWeight;
-    fpss_spinlock_t sendLock;    
+    spinlock_t sendLock;    
 }MPPP_DP_ENTRY;
 
 /**
@@ -239,7 +245,7 @@ static BOOL mpppDpFwdTxEncapPkt
     nBuf_t **encapPkt
 ) {
     UINT32 pktLen;
-    BOOL isInputOrder;
+    UINT32 fragWeight;
     BOOL isFragPkt;
     BOOL ret;
     BOOL endPkt = FALSE;
@@ -255,9 +261,13 @@ static BOOL mpppDpFwdTxEncapPkt
     } else {
         isFragPkt = TRUE;
         ret = mpppDpFwdTxFragPkt(pMpppEntry, pPkt, &pHead, fragWeight);
+        if (unlikely(ret == FALSE)) {
+            pHead = NULL;
+            goto end;
+        }
     }
 
-    if (isFragPkt) {
+    if (TRUE == isFragPkt) {
         MPPP_DP_TX_LOCK(pMpppEntry->sendLock);
     }
 
@@ -265,11 +275,11 @@ static BOOL mpppDpFwdTxEncapPkt
         if (NBUF_GET_PKTNEXT(pktBuf) == NULL) {
             endPkt = TRUE;
         }
-        mpppDpFwdTxEncapHdr(pMpppEntry, NBUF_DESC_GET_PDATA(pktBuf), pPkt, endPkt);
+        mpppDpFwdTxEncapHdr(pMpppEntry, NBUF_GET_PDATA(pktBuf), pPkt, endPkt);
         NBUF_DESC_SET_DESCFLAGS(pktBuf, DFP_DESC_DESCFLAGS_MPPP_ENC);
     }
 
-    if (isFragPkt) {
+    if (TRUE == isFragPkt) {
         MPPP_DP_TX_UNLOCK(pMpppEntry->sendLock);
     }
 
