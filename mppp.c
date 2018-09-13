@@ -1,15 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <linux/spinlock.h>
-#include <linux/compiler.h>
 
 typedef unsigned int UINT32;
 typedef int INT32;
 typedef int BOOL;
 typedef unsigned char UINT8;
-typedef char INT8
+typedef char INT8;
 typedef unsigned short UINT16;
-typedef short INT16
+typedef short INT16;
 
 #define TRUE (1)
 #define FALSE (0)
@@ -24,14 +23,14 @@ typedef short INT16
 #define MPPP_DP_HDR_FLAG_END   (1 << 6)
 
 typedef struct nBufBaseInfo_s {
-    struct nbuffer *PktNext;/* 报文链next */
+    struct nbuffer *pktNext;/* 报文链next */
     struct nbuffer *pktPrev;/* 报文链prev */
     INT8 *bufPtr;/* buf缓冲区的位置，用于分配和释放 */
     INT8 *pData;/* 报文头位置 */
     UINT16 pktLen;/* 报文的长度信息 */
     UINT16 descFlags;
     UINT16 linkPktType;
-}nBufBaseInfo_t
+}nBufBaseInfo_t;
 
 typedef struct nBufInto_s {
     nBufBaseInfo_t baseInfo;
@@ -44,8 +43,8 @@ typedef struct nbuffer {
 #define NBUF_ADJUST_PKTLEN(n, l)        (((nBuf_t*)(n))->info.baseInfo.pktLen += (l))
 #define NBUF_GET_PKTLEN(n)              (((nBuf_t*)(n))->info.baseInfo.pktLen)
 #define NBUF_SET_PKTLEN(n, l)           (((nBuf_t*)(n))->info.baseInfo.pktLen = (l))
-#define NBUF_SET_PKTNEXT(n, next)       (((nBuf_t*)(n))->info.baseInfo.pktNext = (next)))
-#define NBUF_SET_PKTPREV(n, prev)       (((nBuf_t*)(n))->info.baseInfo.pktPrev = (prev)))
+#define NBUF_SET_PKTNEXT(n, next)       (((nBuf_t*)(n))->info.baseInfo.pktNext = (next))
+#define NBUF_SET_PKTPREV(n, prev)       (((nBuf_t*)(n))->info.baseInfo.pktPrev = (prev))
 
 #define NBUF_ADJUST_PDATA(n, l)         (((nBuf_t*)(n))->info.baseInfo.pData += (l))
 #define NBUF_GET_PDATA(n)               (((nBuf_t*)(n))->info.baseInfo.pData)
@@ -53,8 +52,8 @@ typedef struct nbuffer {
 
 #define NBUF_DESC_GET_DESCFLAGS(n)      (((nBuf_t*)(n))->info.baseInfo.descFlags)
 #define NBUF_DESC_SET_DESCFLAGS(n, v)   (((nBuf_t*)(n))->info.baseInfo.descFlags = (v))
-#define NBUF_DESC_SET_DESCFLAGS(n, flg) NBUF_DESC_SET_DESCFLAGS(n, NBUF_DESC_GET_DESCFLAGS(n) | (flg))
-#define NBUF_DESC_CLR_DESCFLAGS(n, flg) NBUF_DESC_SET_DESCFLAGS(n, NBUF_DESC_GET_DESCFLAGS(n) | (~(flg)))
+#define NBUF_DESC_SET_DESCFLAG(n, flg) NBUF_DESC_SET_DESCFLAGS(n, NBUF_DESC_GET_DESCFLAGS(n) | (flg))
+#define NBUF_DESC_CLR_DESCFLAG(n, flg) NBUF_DESC_SET_DESCFLAGS(n, NBUF_DESC_GET_DESCFLAGS(n) | (~(flg)))
 
 #define NBUF_DESC_GET_LINKTYPE(n)       (((nBuf_t*)(n))->info.baseInfo.linkPktType)
 
@@ -75,9 +74,9 @@ typedef struct nbuffer {
 #define DFP_DESC_DESCFLAGS_MPPP_FRAG_BEGIN  (1 << 0)
 #define DFP_DESC_DESCFLAGS_MPPP_ENC         (1 << 1)
 
-#define nBufFree(n)
-#define nBufLenAlloc(l) 
 #define MIN(m, n)   (((m) < (n)) ? (m) : (n))
+
+#define NBUF_PREDATA_SIZE (20)
 
 typedef struct MPPP_DP_ENTRY_STRUCT {
     UINT32 pppIndex;
@@ -86,6 +85,21 @@ typedef struct MPPP_DP_ENTRY_STRUCT {
     UINT32 sendWeight;
     spinlock_t sendLock;    
 }MPPP_DP_ENTRY;
+
+
+static void nBufFree(nBuf_t *n) {
+	
+}
+
+static nBuf_t* nBufLenAlloc(UINT16 len) {
+	return (nBuf_t *)NULL;
+}
+
+static BOOL pppDpChanGetHdr(UINT32 ifindex, UINT32 linkType, INT8* linkHead, INT32 *hdrLen) {
+	*hdrLen = 8;
+	return TRUE;
+}
+
 
 /**
  * mppp报文分片逻辑
@@ -127,7 +141,7 @@ static void mpppDpFwdTxEncapHdr
 
     if (!(NBUF_DESC_GET_DESCFLAGS(pOriPkt) & DFP_DESC_DESCFLAGS_MPPP_FRAG_BEGIN)) {
         mpppHdrFlag |= MPPP_DP_HDR_FLAG_BEGIN;
-        NBUF_DESC_SET_DESCFLAGS(pOriPkt, DFP_DESC_DESCFLAGS_MPPP_FRAG_BEGIN);
+        NBUF_DESC_SET_DESCFLAG(pOriPkt, DFP_DESC_DESCFLAGS_MPPP_FRAG_BEGIN);
     }
 
     if (TRUE == endPkt) {
@@ -139,9 +153,9 @@ static void mpppDpFwdTxEncapHdr
         *cp++ = seqNo & 0xff;
     } else {
         *cp++ = mpppHdrFlag;
-        *cp++ (seqNo >> 16) & 0xff;
-        *cp++ (seqNo >> 8) & 0xff;
-        *cp++ seqNo& 0xff;
+        *cp++ = (seqNo >> 16) & 0xff;
+        *cp++ = (seqNo >> 8) & 0xff;
+        *cp++ = seqNo& 0xff;
     }
 
     return;
@@ -157,17 +171,17 @@ static void mpppDpFwdTxEncapHdr
 */
 static BOOL mpppDpFwdTxFragPkt
 (
-    MPPP_DP_ENTRY *pMpppEntry，
+    MPPP_DP_ENTRY *pMpppEntry,
     nBuf_t *pPkt,
     nBuf_t **encapOutPkt,
     INT32 fragWeight
 ) {
     BOOL ret;
     INT8 linkHead[32] = {0};
-    UINT32 pktLen
+    UINT32 pktLen;
     UINT32 hdrLen;
     UINT32 linkType;
-    INT8 *pData = NULl;
+    INT8 *pData = NULL;
     nBuf_t *pktFrag, *pHeadTmp = NULL, *pHead = NULL;
 
 	//提取报文的链路类型
@@ -201,7 +215,7 @@ static BOOL mpppDpFwdTxFragPkt
         NBUF_DESC_COPY(pktFrag, pPkt);//拷贝报文描述符，因此需要提前备份数据指针
         NBUF_SET_PDATA(pktFrag, pData);
         
-        NBUF_DESC_CLR_DESCFLAGS(pktFrag, DFP_DESC_DESCFLAGS_MPPP_FRAG_BEGIN);//清楚报文描述符中的标记
+        NBUF_DESC_CLR_DESCFLAG(pktFrag, DFP_DESC_DESCFLAGS_MPPP_FRAG_BEGIN);//清楚报文描述符中的标记
         NBUF_SET_PKTNEXT(pktFrag, NULL);
 
         /**
@@ -257,7 +271,7 @@ static BOOL mpppDpFwdTxEncapPkt
     
     if (likely(pktLen <= fragWeight)) {
         pHead = pPkt;
-        isFragPkt = FALSE:
+        isFragPkt = FALSE;
     } else {
         isFragPkt = TRUE;
         ret = mpppDpFwdTxFragPkt(pMpppEntry, pPkt, &pHead, fragWeight);
@@ -276,7 +290,7 @@ static BOOL mpppDpFwdTxEncapPkt
             endPkt = TRUE;
         }
         mpppDpFwdTxEncapHdr(pMpppEntry, NBUF_GET_PDATA(pktBuf), pPkt, endPkt);
-        NBUF_DESC_SET_DESCFLAGS(pktBuf, DFP_DESC_DESCFLAGS_MPPP_ENC);
+        NBUF_DESC_SET_DESCFLAG(pktBuf, DFP_DESC_DESCFLAGS_MPPP_ENC);
     }
 
     if (TRUE == isFragPkt) {
